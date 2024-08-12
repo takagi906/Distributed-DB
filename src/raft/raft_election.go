@@ -23,17 +23,25 @@ func (rf *Raft) isElectionTimeoutLocked() bool {
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	LOG(rf.me, rf.currentTerm, DLog, "%s Receive a RequestVote %v", rf.role, args)
 	term := args.Term
 	reply.Term = rf.currentTerm
+	LOG(rf.me, rf.currentTerm, DLog, "receive a RequestVote %v", args)
 	if term < rf.currentTerm {
 		reply.VoteGranted = false
 		return
 	}
-	rf.becomeFollowerLocked(args.Term)
+	if rf.currentTerm < args.Term {
+		rf.becomeFollowerLocked(args.Term)
+	}
+	if rf.votedFor != -1 {
+		LOG(rf.me, rf.currentTerm, DVote, "-> S%d, Reject, Already voted S%d", args.CandidateId, rf.votedFor)
+		reply.VoteGranted = false
+		return
+	}
 	reply.VoteGranted = true
 	rf.votedFor = args.CandidateId
 	rf.resetElectionTimerLocked()
+	LOG(rf.me, rf.currentTerm, DVote, "-> S%d", args.CandidateId)
 	// Your code here (PartA, PartB).
 }
 
@@ -49,12 +57,12 @@ func (rf *Raft) startElection(term int) {
 	askVoteFromPeer := func(peer int, args *RequestVoteArgs) {
 		reply := &RequestVoteReply{}
 		ok := rf.sendRequestVote(peer, args, reply)
+		rf.mu.Lock()
+		defer rf.mu.Unlock()
 		if !ok {
 			LOG(rf.me, rf.currentTerm, DError, "RequestVote for %d, lost or error", peer)
 			return
 		}
-		rf.mu.Lock()
-		defer rf.mu.Unlock()
 		if rf.currentTerm < reply.Term {
 			rf.becomeFollowerLocked(reply.Term)
 			return
@@ -62,6 +70,7 @@ func (rf *Raft) startElection(term int) {
 		if rf.contextLostLocked(Candidate, args.Term) {
 			return
 		}
+		LOG(rf.me, rf.currentTerm, DLog, "%s receive voteReply from %d %v", rf.role, peer, reply)
 		if reply.VoteGranted {
 			voteSum += 1
 		}

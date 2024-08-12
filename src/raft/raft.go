@@ -101,7 +101,7 @@ func (rf *Raft) becomeLeaderLocked() {
 }
 
 func (rf *Raft) becomeCandidateLocked() {
-	if rf.role != Follower {
+	if rf.role == Leader {
 		LOG(rf.me, rf.currentTerm, DError, "%s Can't become Candidate", rf.role)
 		return
 	}
@@ -270,11 +270,10 @@ func (rf *Raft) killed() bool {
 
 func (rf *Raft) ticker() {
 	for !rf.killed() {
-
 		// Your code here (PartA)
 		// Check if a leader election should be started.
 		rf.mu.Lock()
-		if rf.role == Follower && rf.isElectionTimeoutLocked() {
+		if rf.role != Leader && rf.isElectionTimeoutLocked() {
 			rf.becomeCandidateLocked()
 			go rf.startElection(rf.currentTerm)
 		}

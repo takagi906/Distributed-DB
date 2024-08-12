@@ -2,6 +2,10 @@ package raft
 
 import "time"
 
+const (
+	replicateInterval time.Duration = 70 * time.Millisecond
+)
+
 func (rf *Raft) startReplication(term int) bool {
 	replicateToPeer := func(peer int, args *AppendEntriesArgs) {
 		reply := &AppendEntriesReply{}
@@ -13,6 +17,7 @@ func (rf *Raft) startReplication(term int) bool {
 		rf.mu.Lock()
 		defer rf.mu.Unlock()
 		if rf.currentTerm < reply.Term {
+			LOG(rf.me, rf.currentTerm, DApply, "receive a reply %v", reply)
 			rf.becomeFollowerLocked(reply.Term)
 			return
 		}
@@ -20,9 +25,9 @@ func (rf *Raft) startReplication(term int) bool {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	if rf.contextLostLocked(Leader, term) {
+		LOG(rf.me, rf.currentTerm, DLeader, "Leader[T%d] -> %s[T%d]", term, rf.role, rf.currentTerm)
 		return false
 	}
-	rf.electionStart = time.Now()
 	for i := range rf.peers {
 		if i == rf.me {
 			continue
@@ -31,7 +36,6 @@ func (rf *Raft) startReplication(term int) bool {
 		go replicateToPeer(i, args)
 	}
 	return true
-
 }
 
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
@@ -43,24 +47,26 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	term := args.Term
+	reply.Term = rf.currentTerm
 	if term < rf.currentTerm {
+		LOG(rf.me, rf.currentTerm, DLog2, "<- S%d, Reject log", args.LeaderId)
 		reply.Success = false
-		reply.Term = rf.currentTerm
+		return
 	}
-	if rf.currentTerm < term {
+	LOG(rf.me, rf.currentTerm, DApply, "receive a AppendEntries %v", args)
+	if rf.currentTerm <= term {
 		rf.becomeFollowerLocked(term)
 	}
 	reply.Success = true
-	reply.Term = term
-	rf.electionStart = time.Now()
+	rf.resetElectionTimerLocked()
 }
 
 func (rf *Raft) replicationTicker(term int) {
-	for {
+	for !rf.killed() {
 		ok := rf.startReplication(term)
 		if !ok {
 			return
 		}
-		time.Sleep(100 * time.Duration(time.Millisecond))
+		time.Sleep(replicateInterval)
 	}
 }

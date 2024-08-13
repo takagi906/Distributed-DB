@@ -10,12 +10,12 @@ func (rf *Raft) startReplication(term int) bool {
 	replicateToPeer := func(peer int, args *AppendEntriesArgs) {
 		reply := &AppendEntriesReply{}
 		ok := rf.sendAppendEntries(peer, args, reply)
+		rf.mu.Lock()
+		defer rf.mu.Unlock()
 		if !ok {
 			LOG(rf.me, rf.currentTerm, DError, "AppendEntries for %d, lost or error", peer)
 			return
 		}
-		rf.mu.Lock()
-		defer rf.mu.Unlock()
 		if rf.currentTerm < reply.Term {
 			LOG(rf.me, rf.currentTerm, DApply, "receive a reply %v", reply)
 			rf.becomeFollowerLocked(reply.Term)

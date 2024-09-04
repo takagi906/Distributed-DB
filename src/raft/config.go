@@ -9,9 +9,9 @@ package raft
 //
 
 import (
+	"DistributedKV/src/labgob"
+	"DistributedKV/src/labrpc"
 	"bytes"
-	"course/labgob"
-	"course/labrpc"
 	"log"
 	"math/rand"
 	"runtime"

@@ -25,7 +25,7 @@ import (
 	"time"
 
 	//	"course/labgob"
-	"course/labrpc"
+	"DistributedKV/src/labrpc"
 )
 
 type Role string

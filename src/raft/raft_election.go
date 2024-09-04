@@ -10,6 +10,24 @@ const (
 	electionTimeoutMax time.Duration = 400 * time.Millisecond
 )
 
+// example RequestVote RPC arguments structure.
+// field names must start with capital letters!
+type RequestVoteArgs struct {
+	// Your data here (PartA, PartB).
+	Term         int
+	CandidateId  int
+	lastLogIndex int
+	lastLogTerm  int
+}
+
+// example RequestVote RPC reply structure.
+// field names must start with capital letters!
+type RequestVoteReply struct {
+	// Your data here (PartA).
+	Term        int
+	VoteGranted bool
+}
+
 func (rf *Raft) resetElectionTimerLocked() {
 	rf.electionStart = time.Now()
 	randRange := int64(electionTimeoutMax - electionTimeoutMin)
@@ -91,5 +109,23 @@ func (rf *Raft) startElection(term int) {
 		}
 		args := &RequestVoteArgs{Term: rf.currentTerm, CandidateId: rf.me}
 		go askVoteFromPeer(i, args)
+	}
+}
+
+func (rf *Raft) ticker() {
+	for !rf.killed() {
+		// Your code here (PartA)
+		// Check if a leader election should be started.
+		rf.mu.Lock()
+		if rf.role != Leader && rf.isElectionTimeoutLocked() {
+			rf.becomeCandidateLocked()
+			go rf.startElection(rf.currentTerm)
+		}
+		rf.mu.Unlock()
+		// pause for a random amount of time between 50 and 350
+		// milliseconds.
+		ms := 50 + (rand.Int63() % 300)
+		time.Sleep(time.Duration(ms) * time.Millisecond)
+
 	}
 }
